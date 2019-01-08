@@ -1,0 +1,35 @@
+// Embed OpenCL code into hex array for runtime compilation
+
+#include <cstring>
+#include <map>
+#include <memory>
+#include <vector>
+
+using namespace std;
+
+// Container for embedded OpenCL sources that shall be
+// runtime-compiled in case the OpenCL target is activated.
+extern unique_ptr<map<string, vector<unsigned char>*> > cl_sources;
+
+static unsigned char cl_hex[] = { @CL_HEX@ };
+
+class AddCLsource
+{
+public :
+
+	AddCLsource()
+	{
+		if (!cl_sources.get())
+			cl_sources.reset(new map<string, vector<unsigned char>*>());
+
+		static vector<unsigned char> cl_source(sizeof(cl_hex));
+		memcpy(&cl_source[0], cl_hex, sizeof(cl_hex));
+	
+		static const string cl_name = "@CL_NAME@";
+
+		(*cl_sources)[cl_name] = &cl_source;
+	};
+};
+
+static AddCLsource addCLsource;
+
