@@ -8,6 +8,10 @@
 #include <vector>
 
 #if !defined(NDEBUG)
+#define GPU_DEBUG
+#endif
+
+#if defined(GPU_DEBUG)
 class CUDAgpu;
 #endif
 
@@ -77,7 +81,7 @@ class CLgpu : public IGPU
 
 	CLgpu();
 
-#if !defined(NDEBUG)
+#if defined(GPU_DEBUG)
 	std::unique_ptr<CUDAgpu> cudaGPU;
 #endif
 

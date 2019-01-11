@@ -13,11 +13,11 @@ extern unique_ptr<map<string, vector<unsigned char>*> > cl_sources;
 
 static unsigned char cl_hex[] = { @CL_HEX@ };
 
-class AddCLsource
+class AddCLsource@CL_NAME@
 {
 public :
 
-	AddCLsource()
+	AddCLsource@CL_NAME@()
 	{
 		if (!cl_sources.get())
 			cl_sources.reset(new map<string, vector<unsigned char>*>());
@@ -31,5 +31,5 @@ public :
 	};
 };
 
-static AddCLsource addCLsource;
+static AddCLsource@CL_NAME@ addCLsource@CL_NAME@;
 

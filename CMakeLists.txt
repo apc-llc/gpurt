@@ -73,7 +73,7 @@ include_directories(${OpenCL_INCLUDE_DIR})
 add_executable(${PROJECT_NAME}_xxd ${CMAKE_CURRENT_SOURCE_DIR}/xxd/xxd.c)
 
 # Embed OpenCL sources and add runtime compilation hooks.
-file(GLOB CL_SRC "src/*.cl")
+file(GLOB CL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cl")
 set(CL_EMBED ${PROJECT_NAME}_xxd)
 foreach(CL_FILE ${CL_SRC})
 	cuda_compute_build_path("${CL_FILE}" CL_BUILD_PATH)
