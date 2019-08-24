@@ -4,7 +4,7 @@ Need to offer both CUDA and OpenCL backends in a client application? Prefer CUDA
 
 ## Usage
 
-Integrate the library into your CMake project by adding it as a submodule andi as a CMake subdirectory:
+Integrate the library into your CMake project by adding it as a submodule and as a CMake subdirectory:
 
 ```
 git submodule add https://github.com/apc-llc/gpurt
