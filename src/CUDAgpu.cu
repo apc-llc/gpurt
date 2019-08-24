@@ -352,33 +352,13 @@ GPUerror_t CUDAgpu::launch(dim3 nblocks, dim3 szblock, unsigned int szshmem, voi
 		}
 
 		// Launch precompiled CUDA kernel.
+		std::vector<void*> args(kargs.size());
+		for (int i = 0; i < args.size(); i++)
+			args[i] = kargs[i].addr;
 
 		cudaError_t cudaError;
-		CUDA_ERR_CHECK(cudaError = cudaConfigureCall(nblocks, szblock, szshmem, stream ? *(cudaStream_t*)stream : 0));
-		if (cudaError != cudaSuccess)
-		{
-			fatalError = cudaError;
-			return { fatalError };
-		}
-
-		size_t offset = 0;
-		for (size_t i = 0, e = kargs.size(); i != e; i++)
-		{
-			// Respect natural alignment of kernel arguments.
-			if (offset % min(kargs[i].size, (size_t)8))
-				offset += kargs[i].size - min(offset % kargs[i].size, (size_t)8);
-
-			CUDA_ERR_CHECK(cudaError = cudaSetupArgument(kargs[i].addr, kargs[i].size, offset));
-			if (cudaError != cudaSuccess)
-			{
-				fatalError = cudaError;
-				return { fatalError };
-			}
-
-			offset += kargs[i].size;
-		}
-
-		CUDA_ERR_CHECK(cudaError = cudaLaunch((*cuda_kernels)[(string)name]));
+		CUDA_ERR_CHECK(cudaError = cudaLaunchKernel((*cuda_kernels)[(string)name],
+			nblocks, szblock, reinterpret_cast<void**>(&args[0]), szshmem, stream ? *(cudaStream_t*)stream : 0));
 		if (cudaError != cudaSuccess)
 		{
 			fatalError = cudaError;

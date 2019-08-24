@@ -13,5 +13,5 @@ file(READ ${CL_HEX_FILE} CL_HEX)
 get_filename_component(CL_NAME ${CL_EMBED_FILE} NAME_WE)
 
 # Substitute encoded HEX content into template source file
-configure_file("${SOURCE_DIR}/src/OpenCL.cpp.in" ${CL_EMBED_FILE})
+configure_file("${GPURT_INCLUDE_DIRS}/OpenCL.cpp.in" ${CL_EMBED_FILE})
 
