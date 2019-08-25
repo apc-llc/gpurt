@@ -60,14 +60,21 @@ endif()
 add_executable(${PROJECT_NAME}_xxd ${CMAKE_CURRENT_SOURCE_DIR}/xxd/xxd.c)
 
 file(GLOB GPURT_SRC "src/*.cpp" "src/*.cu" "src/*.c")
+
+# Add internal kernels for:
+# 1) cl_mem pointer address retrieval
+# 2) maximum number of concurrent blocks
 add_opencl_kernel("${CMAKE_CURRENT_SOURCE_DIR}/src/getRawPointer.cl" GPURT_SRC)
 add_opencl_kernel("${CMAKE_CURRENT_SOURCE_DIR}/src/maxConcurrentBlockEval.cl" GPURT_SRC)
+
+# Note the library must be static - to properly override 
+# calls to __cudaRegisterFunction function.
 if (WIN32)
-cuda_add_library(${PROJECT_NAME} SHARED ${GPURT_SRC})
+cuda_add_library(${PROJECT_NAME} STATIC ${GPURT_SRC})
 else()
 # Needed to workaround the issue described here:
 # https://stackoverflow.com/questions/30642229/fail-to-build-shared-library-using-cmake-and-cuda
-cuda_add_library(${PROJECT_NAME} SHARED ${GPURT_SRC} OPTIONS --compiler-options "-fPIC")
+cuda_add_library(${PROJECT_NAME} STATIC ${GPURT_SRC} OPTIONS --compiler-options "-fPIC")
 endif()
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCL_INCLUDE_DIR})
