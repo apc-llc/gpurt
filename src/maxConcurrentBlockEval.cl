@@ -1,8 +1,8 @@
 // The maximum number of registers the GPU kernels are expected to have.
 // This value is used to calculate the maximum number of active ("persistent") blocks
 // the target GPU can physically process in parallel without preemption.
-// The application kernels shall be designed to launch this exact number of blocks, in order to
-// process multiple loops in one kernel one by one and save time on synchronizations.
+// MCBV's kernels are designed to launch this exact number of blocks, in order to
+// process multiple Monte Carlo sizes in one kernel one by one and save time on synchronizations.
 #define NREGS 32
 
 #define NITS 10000

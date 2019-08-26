@@ -61,6 +61,8 @@ class IGPU
 	virtual int getConstMemSize() = 0;
 	
 	virtual int getSharedMemSizePerSM() = 0;
+
+	virtual int getSharedMemSizePerBlock() = 0;
 	
 	// Allocate global memory from the preallocated buffer.
 	virtual void* malloc(size_t size) = 0;
@@ -151,6 +153,14 @@ public :
 			return 0;
 
 		return gpu->getSharedMemSizePerSM();
+	}
+
+	static int getSharedMemSizePerBlock()
+	{
+		if (!initGPU())
+			return 0;
+
+		return gpu->getSharedMemSizePerBlock();
 	}
 	
 	// Allocate global memory from the preallocated buffer.

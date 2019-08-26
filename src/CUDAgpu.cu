@@ -16,7 +16,9 @@
 // the target GPU can physically process in parallel without preemption.
 // The application kernels shall be designed to launch this exact number of blocks, in order to
 // process multiple loops in one kernel one by one and save time on synchronizations.
+#ifndef NREGS
 #define NREGS 32
+#endif
 
 // Unify copy direction constants between CUDA and OpenCL.
 const int memcpyHostToDevice = cudaMemcpyHostToDevice;
@@ -234,6 +236,14 @@ int CUDAgpu::getSharedMemSizePerSM()
 	return szshmem;
 }
 
+int CUDAgpu::getSharedMemSizePerBlock()
+{
+	if (!initGPU())
+		return 0;
+
+	return szshmemPerBlock;
+}
+
 void* CUDAgpu::malloc(size_t size)
 {
 #define MALLOC_ALIGNMENT 256
@@ -331,70 +341,47 @@ GPUerror_t CUDAgpu::launch(dim3 nblocks, dim3 szblock, unsigned int szshmem, voi
 	if (!cuda_kernels.get())
 		return { cudaErrorNotReady };
 
+	// Unlike for OpenCL, for CUDA we only need arguments addresses, without sizes.
+	vector<void*> kargs(kargs_.size() + 2);
+	for (int i = 0, e = kargs_.size(); i < e; i++)
+		kargs[i] = kargs_[i].addr;
+
 	// The kernel must be indexed either in precompiled or
 	// JIT-compiled kernels index.
+	void* shmem = NULL;
+	void* kernel = NULL;
 	if (cuda_kernels->find((string)name) != cuda_kernels->end())
-	{
+	{		
 		// Add two extra artificial arguments that mostly make sense for OpenCL:
 		// local memory pointer and local memory size.
-		std::vector<KernelArgument> kargs = kargs_;
-		{
-			void* shmem = NULL;
-			KernelArgument kshmem;
-			kshmem.addr = &shmem;
-			kshmem.size = sizeof(shmem);
-			kargs.push_back(kshmem);
-	
-			KernelArgument kszshmem;
-			kszshmem.addr = &szshmem;
-			kszshmem.size = sizeof(szshmem);
-			kargs.push_back(kszshmem);
-		}
+		kargs[kargs_.size()] = &shmem;
+		kargs[kargs_.size() + 1] = &szshmem;
 
 		// Launch precompiled CUDA kernel.
-		std::vector<void*> args(kargs.size());
-		for (int i = 0; i < args.size(); i++)
-			args[i] = kargs[i].addr;
-
-		cudaError_t cudaError;
-		CUDA_ERR_CHECK(cudaError = cudaLaunchKernel((*cuda_kernels)[(string)name],
-			nblocks, szblock, reinterpret_cast<void**>(&args[0]), szshmem, stream ? *(cudaStream_t*)stream : 0));
-		if (cudaError != cudaSuccess)
-		{
-			fatalError = cudaError;
-			return { fatalError };
-		}
+		kernel = (*cuda_kernels)[(string)name];
 	}
 	else if (cuda_kernels_jit.find((string)name) != cuda_kernels_jit.end())
 	{
 		// Add two extra artificial arguments that mostly make sense for OpenCL:
 		// local memory pointer and local memory size. Note here we artificially
 		// send global memory pointer instead of shared memory.
-		std::vector<KernelArgument> kargs = kargs_;
-		{
-			KernelArgument kshmem;
-			kshmem.addr = &shmem_debug;
-			kshmem.size = sizeof(shmem_debug);
-			kargs.push_back(kshmem);
-	
-			KernelArgument kszshmem;
-			kszshmem.addr = &szshmem;
-			kszshmem.size = sizeof(szshmem);
-			kargs.push_back(kszshmem);
-		}
+		kargs[kargs_.size()] = &shmem_debug;
+		kargs[kargs_.size() + 1] = &szshmem;
 
 		// Launch JIT-compiled CUDA kernel.
-		
-		// Prepare kernel arguments.
-		vector<void*> params(kargs.size());
-		for (size_t i = 0, e = kargs.size(); i < e; i++)
-			params[i] = kargs[i].addr;
-
-		CU_ERR_CHECK(cuLaunchKernel(cuda_kernels_jit[(string)name], nblocks.x, nblocks.y, nblocks.z,
-			szblock.x, szblock.y, szblock.z, szshmem, stream ? *(cudaStream_t*)stream : 0, &params[0], NULL));
+		kernel = cuda_kernels_jit[(string)name];
 	}
 	else
 		return { cudaErrorInvalidDeviceFunction };
+
+	cudaError_t cudaError;
+	CUDA_ERR_CHECK(cudaError = cudaLaunchCooperativeKernel(
+		kernel, nblocks, szblock, &kargs[0], szshmem, stream ? *(cudaStream_t*)stream : 0));
+	if (cudaError != cudaSuccess)
+	{
+		fatalError = cudaError;
+		return { fatalError };
+	}
 
 	return { fatalError };
 }
@@ -582,7 +569,7 @@ CUDAgpu::CUDAgpu() : fatalError(cudaSuccess), ngpus(0), gmem(NULL), ptr(NULL)
 	
 	szshmem = props.sharedMemPerMultiprocessor;
 	
-	size_t szshmemPerBlock = min(szshmem, (nsms * szshmem) / nblocks);
+	szshmemPerBlock = min(props.sharedMemPerBlock, (nsms * szshmem) / nblocks);
 
 	std::cout << "Using GPU " << props.name << " : max concurrent blocks = " << nblocks <<
 		" : " << szshmemPerBlock << "B of shmem per block" << std::endl;

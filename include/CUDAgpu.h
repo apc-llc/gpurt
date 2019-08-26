@@ -25,7 +25,7 @@ class CUDAgpu : public IGPU
 	int nblocks;
 	int nsms;
 	size_t szcmem;
-	size_t szshmem;
+	size_t szshmem, szshmemPerBlock;
 	size_t szgmem;
 	
 	char *gmem, *ptr;
@@ -52,6 +52,8 @@ class CUDAgpu : public IGPU
 	virtual int getConstMemSize();
 	
 	virtual int getSharedMemSizePerSM();
+	
+	virtual int getSharedMemSizePerBlock();
 	
 	// Allocate global memory from the preallocated buffer.
 	virtual void* malloc(size_t size);

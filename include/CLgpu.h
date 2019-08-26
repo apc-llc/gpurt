@@ -8,10 +8,6 @@
 #include <vector>
 
 #if !defined(NDEBUG)
-#define GPU_DEBUG
-#endif
-
-#if defined(GPU_DEBUG)
 class CUDAgpu;
 #endif
 
@@ -37,7 +33,7 @@ class CLgpu : public IGPU
 	int nblocks;
 	int nsms;
 	int szcmem;
-	int szshmem;
+	int szshmem, szshmemPerBlock;
 	size_t szgmem;
 	
 	char *gmem, *ptr;
@@ -58,6 +54,8 @@ class CLgpu : public IGPU
 	virtual int getConstMemSize();
 	
 	virtual int getSharedMemSizePerSM();
+
+	virtual int getSharedMemSizePerBlock();
 	
 	// Allocate global memory from the preallocated buffer.
 	virtual void* malloc(size_t size);
@@ -81,7 +79,7 @@ class CLgpu : public IGPU
 
 	CLgpu();
 
-#if defined(GPU_DEBUG)
+#if !defined(NDEBUG)
 	std::unique_ptr<CUDAgpu> cudaGPU;
 #endif
 
