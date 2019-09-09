@@ -76,6 +76,7 @@ else()
 # https://stackoverflow.com/questions/30642229/fail-to-build-shared-library-using-cmake-and-cuda
 cuda_add_library(${PROJECT_NAME} STATIC ${GPURT_SRC} OPTIONS --compiler-options "-fPIC")
 endif()
+set_property(TARGET ${PROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCL_INCLUDE_DIR})
 target_link_libraries(${PROJECT_NAME} ${CUDA_cuda_LIBRARY})
