@@ -338,7 +338,7 @@ GPUerror_t CUDAgpu::launch(dim3 nblocks, dim3 szblock, unsigned int szshmem, voi
 		return { cudaErrorNoDevice };
 
 	// Make sure the kernels index exists.
-	if (!cuda_kernels.get())
+	if (!cuda_kernels.get() && !cuda_kernels_jit.size())
 		return { cudaErrorNotReady };
 
 	// Unlike for OpenCL, for CUDA we only need arguments addresses, without sizes.
@@ -350,7 +350,7 @@ GPUerror_t CUDAgpu::launch(dim3 nblocks, dim3 szblock, unsigned int szshmem, voi
 	// JIT-compiled kernels index.
 	void* shmem = NULL;
 	void* kernel = NULL;
-	if (cuda_kernels->find((string)name) != cuda_kernels->end())
+	if (cuda_kernels.get() && (cuda_kernels->find((string)name) != cuda_kernels->end()))
 	{		
 		// Add two extra artificial arguments that mostly make sense for OpenCL:
 		// local memory pointer and local memory size.
