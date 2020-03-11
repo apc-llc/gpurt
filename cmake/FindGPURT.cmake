@@ -21,7 +21,7 @@ macro(add_opencl_kernel CL_FILE_SRC SOURCES)
 		list(APPEND INCLUDE_FLAGS "-I${INCLUDE_DIR}")
 	endforeach()
 	list(APPEND INCLUDE_FLAGS "-I${GPURT_INCLUDE_DIRS}")
-	add_custom_commaind(
+	add_custom_command(
         	OUTPUT ${CL_FILE}
 	        COMMAND ${CMAKE_COMMAND} -E make_directory "${CL_INTERMEDIATE_DIRECTORY}"
 		COMMAND "${CUDA_NVCC_EXECUTABLE}" -x c++ -E -D__OPENCL_VERSION__=1 ${INCLUDE_FLAGS} ${CL_FILE_SRC} -o ${CL_FILE}
