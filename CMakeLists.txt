@@ -32,10 +32,6 @@ find_package(GPURT QUIET REQUIRED)
 
 set(CUDA_SEPARABLE_COMPILATION ON)
 
-# Manual build type selection (for debugging purposes)
-#set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_BUILD_TYPE Release)
-
 set(CUDA_NVCC_FLAGS_RELEASE "-DNDEBUG;-O3;--use_fast_math;-lineinfo;${CUDA_NVCC_FLAGS_RELEASE}")
 set(CUDA_NVCC_FLAGS_DEBUG "-G;-g;-O0;${CUDA_NVCC_FLAGS_DEBUG}")
 
