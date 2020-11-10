@@ -73,7 +73,7 @@ else()
 cuda_add_library(${PROJECT_NAME} STATIC ${GPURT_SRC} OPTIONS --compiler-options "-fPIC")
 endif()
 set_property(TARGET ${PROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCL_INCLUDE_DIR})
 target_link_libraries(${PROJECT_NAME} ${CUDA_cuda_LIBRARY})
 target_link_libraries(${PROJECT_NAME} ${CUDA_LIBRARIES})
@@ -83,4 +83,8 @@ target_link_libraries(${PROJECT_NAME} Ws2_32)
 else()
 target_link_libraries(${PROJECT_NAME} dl)
 endif()
+
+# Test program
+cuda_add_executable(${PROJECT_NAME}_test "src/test/${PROJECT_NAME}.cpp")
+target_link_libraries(${PROJECT_NAME}_test ${PROJECT_NAME})
 
