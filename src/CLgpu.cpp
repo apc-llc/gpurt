@@ -3,6 +3,7 @@
 #if !defined(NDEBUG)
 #include "CUDAgpu.h"
 #endif
+#include "res_embed.h"
 
 #include <cstring>
 #include <iostream>
@@ -13,17 +14,11 @@
 // The maximum number of registers the GPU kernels are expected to have.
 // This value is used to calculate the maximum number of active ("persistent") blocks
 // the target GPU can physically process in parallel without preemption.
-// MCBV's kernels are designed to launch this exact number of blocks, in order to
-// process multiple Monte Carlo sizes in one kernel one by one and save time on synchronizations.
 #ifndef NREGS
 #define NREGS 32
 #endif
 
 using namespace std;
-
-// Container for embedded OpenCL sources that shall be
-// runtime-compiled in case the OpenCL target is activated.
-unique_ptr<map<string, vector<unsigned char>*> > cl_sources;
 
 bool CLgpu::initGPU()
 {
@@ -544,119 +539,109 @@ CLgpu::CLgpu() : fatalError(CL_SUCCESS), ngpus(0), gmem(NULL), ptr(NULL)
 	// Create context.
 	context = clCreateContext(NULL, 1, &device, NULL, NULL, &clError);
 
-	if (cl_sources)
+	// Build programs for all embedded OpenCL sources.
+	for (auto& i : res::embed::get_all())
 	{
-		// Build programs for all embedded OpenCL sources.
-		for (map<string, vector<unsigned char>*>::iterator i = cl_sources->begin(), e = cl_sources->end(); i != e; i++)
+		const string& name = std::get<0>(i);
+		const char* source = std::get<1>(i);
+		size_t szsource = std::get<2>(i);
+
+		programs.push_back(clCreateProgramWithSource(context, 1, &source, &szsource, &clError));
+		CL_RETURN_ON_ERR(clError);
+		
+		cl_program& program = programs.back();
+
+		string options = "";
+		if (!strcmp(&vendor[0], "NVIDIA Corporation"))
 		{
-			const string& name = i->first;
-	
-			// Check for broken pointers, just in case.
-			const vector<unsigned char>* pvsource = i->second;
-			if (!pvsource) continue;
-		
-			const vector<unsigned char>& vsource = *pvsource;
-			const char* source = (const char*)&vsource[0];
-			size_t szsource = vsource.size();
+			options += "-cl-nv-verbose";
 
-			programs.push_back(clCreateProgramWithSource(context, 1, &source, &szsource, &clError));
-			CL_RETURN_ON_ERR(clError);
-		
-			cl_program& program = programs.back();
-
-			string options = "";
-			if (!strcmp(&vendor[0], "NVIDIA Corporation"))
-			{
-				options += "-cl-nv-verbose";
-
-				// Specify the maximum register count equal to NREGS
-				{
-					stringstream ss;
-					ss << " -cl-nv-maxrregcount=";
-					ss << NREGS;
-					options += ss.str();
-				}
-
-#if !defined(NDEBUG)
-				options += " -cl-nv-opt-disable";
-				options += " -nv-line-info";
-				options += " -nv-debug-info";
-#else
-				options += " -D__FAST_RELAXED_MATH__ -cl-fast-relaxed-math";
-#endif
-			}
-
-			cl_int clBuildError = clBuildProgram(program, 1, &device, options.c_str(), NULL, NULL);
-
-			// Read the build log.
-			size_t szlog = 0;
-			CL_RETURN_ON_ERR(clError = clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &szlog));
-			vector<char> log(szlog + 1);
-			CL_RETURN_ON_ERR(clError = clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, szlog, &log[0], NULL));
-			log[szlog] = '\0';
-
-			string eol = "";		
+			// Specify the maximum register count equal to NREGS
 			{
 				stringstream ss;
-				ss << endl;
-				eol = ss.str();
+				ss << " -cl-nv-maxrregcount=";
+				ss << NREGS;
+				options += ss.str();
 			}
+
+#if !defined(NDEBUG)
+			options += " -cl-nv-opt-disable";
+			options += " -nv-line-info";
+			options += " -nv-debug-info";
+#else
+			options += " -D__FAST_RELAXED_MATH__ -cl-fast-relaxed-math";
+#endif
+		}
+
+		cl_int clBuildError = clBuildProgram(program, 1, &device, options.c_str(), NULL, NULL);
+
+		// Read the build log.
+		size_t szlog = 0;
+		CL_RETURN_ON_ERR(clError = clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &szlog));
+		vector<char> log(szlog + 1);
+		CL_RETURN_ON_ERR(clError = clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, szlog, &log[0], NULL));
+		log[szlog] = '\0';
+
+		string eol = "";		
+		{
+			stringstream ss;
+			ss << endl;
+			eol = ss.str();
+		}
 
 #if defined(NDEBUG)			
-			if (clBuildError != CL_SUCCESS)
+		if (clBuildError != CL_SUCCESS)
 #endif
+		{
+			if ((string)(char*)&log[0] != eol)
+				cout << (char*)&log[0] << endl;
+		}
+
+		// Record kernel intermediate representation (binary).
+		{		
+			cl_int nprograms;
+			CL_RETURN_ON_ERR(clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_int), &nprograms, NULL));
+		
+			vector<size_t> programSizes(nprograms);
+			CL_RETURN_ON_ERR(clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES, nprograms * sizeof(size_t), &programSizes[0], NULL));
+		
+			vector<vector<unsigned char> > programBinaries(nprograms);
+			vector<unsigned char*> programBinariesPtrs(nprograms);
+			for (int i = 0; i < nprograms; i++)
 			{
-				if ((string)(char*)&log[0] != eol)
-					cout << (char*)&log[0] << endl;
+				programBinaries[i].resize(programSizes[i]);
+				programBinariesPtrs[i] = &programBinaries[i][0];
 			}
 
-			// Record kernel intermediate representation (binary).
-			{		
-				cl_int nprograms;
-				CL_RETURN_ON_ERR(clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_int), &nprograms, NULL));
-		
-				vector<size_t> programSizes(nprograms);
-				CL_RETURN_ON_ERR(clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES, nprograms * sizeof(size_t), &programSizes[0], NULL));
-		
-				vector<vector<unsigned char> > programBinaries(nprograms);
-				vector<unsigned char*> programBinariesPtrs(nprograms);
-				for (int i = 0; i < nprograms; i++)
-				{
-					programBinaries[i].resize(programSizes[i]);
-					programBinariesPtrs[i] = &programBinaries[i][0];
-				}
+			CL_RETURN_ON_ERR(clGetProgramInfo(program, CL_PROGRAM_BINARIES, nprograms * sizeof(unsigned char*),
+				&programBinariesPtrs[0], NULL));
 
-				CL_RETURN_ON_ERR(clGetProgramInfo(program, CL_PROGRAM_BINARIES, nprograms * sizeof(unsigned char*),
-					&programBinariesPtrs[0], NULL));
-
-				if (nprograms != 1)
-				{
-					fprintf(stderr, "Expecting exactly one program binary, but got %d\n", nprograms);
-					clError = CL_BUILD_PROGRAM_FAILURE;
-					CL_RETURN_ON_ERR(clError);
-				}
-			
-				cl_binaries[name] = string((char*)&programBinariesPtrs[0][0], programSizes[0]);
-			}
-
-			// Create compiled kernel.
-			cl_kernel kernel = clCreateKernel(program, name.c_str(), &clError);
-		
-			if (clError != CL_SUCCESS)
-			{			
-				cout << cl_binaries[name] << endl;
-
+			if (nprograms != 1)
+			{
+				fprintf(stderr, "Expecting exactly one program binary, but got %d\n", nprograms);
+				clError = CL_BUILD_PROGRAM_FAILURE;
 				CL_RETURN_ON_ERR(clError);
 			}
-
-			clError = clBuildError;
-			CL_RETURN_ON_ERR(clError);
-				
-			cl_kernels[name] = kernel;
-		
-			cout << "Compiled OpenCL kernel \"" << name << "\"" << endl;
+			
+			cl_binaries[name] = string((char*)&programBinariesPtrs[0][0], programSizes[0]);
 		}
-		cout << endl;
+
+		// Create compiled kernel.
+		cl_kernel kernel = clCreateKernel(program, name.c_str(), &clError);
+		
+		if (clError != CL_SUCCESS)
+		{			
+			cout << cl_binaries[name] << endl;
+
+			CL_RETURN_ON_ERR(clError);
+		}
+
+		clError = clBuildError;
+		CL_RETURN_ON_ERR(clError);
+				
+		cl_kernels[name] = kernel;
+		
+		cout << "Compiled OpenCL kernel \"" << name << "\"" << endl;
 	}
 
 	// Create command queue.
